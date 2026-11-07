@@ -44,23 +44,70 @@ fn myanmar_syllables_are_single_clusters() {
     assert_eq!(starts, vec![0, 12, 13, 25]);
 }
 
+/// The reported Word difference (screenshot): Word keeps a space-delimited Myanmar token on one
+/// line and wraps it whole — it does not break the token between its syllables ("သုံး" / "ပါးဆယ်လီ").
+/// A line breaks at the spaces around the token, never inside it.
 #[test]
-fn myanmar_without_spaces_wraps_between_syllables() {
+fn myanmar_spaced_word_has_no_break_inside_it() {
+    let text = "သုံးပါးဆယ်လီ";
+    let l = lay(&Document::from_text(text));
+    let pl = para_layout(&l, 0);
+    assert!(
+        pl.clusters.iter().all(|c| !c.break_after || c.end == text.len()),
+        "no break opportunity inside the token: {:?}",
+        pl.clusters.iter().map(|c| (c.start, c.end, c.break_after)).collect::<Vec<_>>()
+    );
+    // And the token is not split across lines: it fits one line and stays on it.
+    assert_eq!(pl.lines.len(), 1);
+    assert_eq!((pl.lines[0].c0, pl.lines[0].c1), (0, pl.clusters.len()));
+}
+
+/// The same token inside a longer paragraph with spaces: no line may begin inside the token, and
+/// no line may end between its syllables — the token wraps whole, like in Word.
+#[test]
+fn myanmar_spaced_word_stays_one_unit_in_a_paragraph() {
+    let line = "လှန့်ကြိုးမား၍ သုံးပါးဆယ်လီ ပါရီမစ်တံ့အဟန့် ";
+    let text = line.repeat(12);
+    let token = "သုံးပါးဆယ်လီ";
+    let tok_len = token.len();
+    let l = lay(&Document::from_text(&text));
+    let pl = para_layout(&l, 0);
+    for line in pl.lines.iter() {
+        // A line may not start inside the token…
+        let start = pl.clusters.get(line.c0).map(|c| c.start).unwrap_or(0);
+        for m in text.match_indices(token) {
+            assert!(start <= m.0 || start >= m.0 + tok_len, "line starts at {start}, inside the token at {}", m.0);
+        }
+        // …and may not end inside it either.
+        if line.c1 > 0 {
+            let end = pl.clusters.get(line.c1 - 1).map(|c| c.end).unwrap_or(0);
+            for m in text.match_indices(token) {
+                assert!(end <= m.0 || end >= m.0 + tok_len, "line ends at {end}, inside the token at {}", m.0);
+            }
+        }
+    }
+}
+
+#[test]
+fn myanmar_without_spaces_still_wraps() {
+    // Word breaks Myanmar only at spaces; a paragraph with no spaces at all still wraps, at the
+    // line edge (an overlong token), between syllable clusters and never inside one.
     let text = MYANMAR.repeat(80);
     let l = lay(&Document::from_text(&text));
     let pl = para_layout(&l, 0);
     assert!(pl.lines.len() > 1, "a long Myanmar paragraph wraps");
-    let breaks = wordcraft_doc::cluster::myanmar_breaks(&text);
-    // A line may end before each syllable: before မာ and စာ, never before န် (a final).
-    for c in &pl.clusters {
-        assert_eq!(c.break_after, breaks.contains(&c.end), "break after {}", c.end);
+    // No break opportunity inside the run: it is one long word to the breaker.
+    assert!(pl.clusters.iter().all(|c| !c.break_after), "no break opportunities inside an unspaced Myanmar run");
+    // Every cluster lands on exactly one line, in order, and none of them is split.
+    let mut rebuilt = String::new();
+    for line in &pl.lines {
+        for c in &pl.clusters[line.c0..line.c1] {
+            let (s, e) = (c.start.min(text.len()), c.end.min(text.len()));
+            rebuilt.push_str(&text[s..e]);
+        }
     }
-    assert!(pl.clusters.iter().any(|c| c.break_after && c.end == 12) && !pl.clusters.iter().any(|c| c.break_after && c.end == 6));
-    for line in pl.lines.iter().skip(1) {
-        let start = pl.clusters[line.c0].start;
-        assert!(breaks.contains(&start), "line starts at syllable {start}");
-    }
-    // Lines are full: a syllable break, not an emergency break after one cluster.
+    assert_eq!(rebuilt, text);
+    // Lines are full: an emergency break at the edge, not an early one.
     assert!(pl.lines[0].c1 - pl.lines[0].c0 > 10);
 }
 

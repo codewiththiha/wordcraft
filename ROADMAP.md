@@ -1271,6 +1271,7 @@ MATH glyphs that reference the same construction now share its immutable variant
 | 2026-11-02 | trivial | Progress log: ODT round trips keep their page count (gap 19) |
 | 2026-11-02 | trivial | Progress log: emphasis marks, SET fields, ODT page backgrounds and tables (gap 19) |
 | 2026-11-02 | trivial | Progress log: ODT checked against LibreOffice's templates (gap 19) |
+| 2026-11-07 | minor | Myanmar: a space-delimited token no longer breaks between its syllables — Word keeps the token whole and wraps it to the next line (checked against MS Word); an unspaced Myanmar run breaks at the line edge, between syllable clusters |
 | 2026-11-01 | trivial | Progress log: ODT at ~90% (gap 19) |
 | 2026-10-29 | trivial | Progress log: corporate authors in bibliographies (#4848) |
 | 2026-10-29 | trivial | Progress log: Table Properties follows the selection (#4857) |

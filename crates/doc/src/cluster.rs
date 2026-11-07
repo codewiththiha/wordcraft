@@ -16,8 +16,9 @@ fn is_stacker(c: char) -> bool {
 }
 
 /// Dependent vowel signs, medials, tone marks and other combining signs of Myanmar, Khmer and
-/// Tai Tham: never the start of a cluster.
-fn is_dependent(c: char) -> bool {
+/// Tai Tham: never the start of a cluster. Also consulted by word selection: a space-delimited
+/// Myanmar run is one word, as in Word (refs #604).
+pub(crate) fn is_dependent(c: char) -> bool {
     matches!(u32::from(c),
         0x102B..=0x103E
         | 0x1056..=0x1059

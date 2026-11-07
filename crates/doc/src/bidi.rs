@@ -24,11 +24,15 @@ pub fn is_complex_script(c: char) -> bool {
 
 /// A character that belongs to a word for word selection and Ctrl+arrow movement: letters,
 /// digits, `_` and `'`, plus what sits inside Persian and Arabic words: the zero-width non-joiner
-/// (نیم‌فاصله, as in «می‌خواهم»), the zero-width joiner, tatweel and the Arabic combining marks.
+/// (نیم‌فاصله, as in «می‌خواهم»), the zero-width joiner, tatweel and the Arabic combining marks,
+/// and the combining signs of Myanmar, Khmer, Tai Tham and Tai Viet (vowels, tones, the stacker /
+/// virama, asat and medial signs, via cluster::is_dependent): a space-delimited
+/// Myanmar token is one word, as in Word (refs #604).
 pub fn is_word_char(c: char) -> bool {
     c.is_alphanumeric()
         || c == '_'
         || c == '\''
+        || crate::cluster::is_dependent(c)
         || matches!(u32::from(c), 0x200C | 0x200D | 0x0640 | 0x0610..=0x061A | 0x064B..=0x065F | 0x0670 | 0x06D6..=0x06DC | 0x06DF..=0x06E8 | 0x06EA..=0x06ED | 0x08D3..=0x08FF | 0x0300..=0x036F)
 }
 
@@ -76,6 +80,18 @@ mod tests {
         assert!("می‌خواهم".chars().all(is_word_char), "ZWNJ is inside the word");
         assert!("کِتاب".chars().all(is_word_char), "so are harakat");
         assert!(!is_word_char(' ') && !is_word_char('،'));
+        // Myanmar dependent signs (vowels, tones, asat, stacker, medials) are not
+        // alphanumeric but sit inside a syllable; the selection treats a space-delimited
+        // Myanmar run as one word (refs #604).
+        assert!("စမ်း သပ်ခြင်း".chars().filter(|c| *c != ' ').all(is_word_char));
+        assert!(is_word_char('\u{1039}'), "killer/virama");
+        assert!(is_word_char('\u{103A}'), "asat");
+        assert!(is_word_char('\u{102C}'), "aa vowel (Mc)");
+        assert!(is_word_char('\u{1031}'), "e-kar (Mc)");
+        assert!(is_word_char('\u{103C}'), "medial ra (Mc)");
+        assert!(is_word_char('\u{103E}'), "medial ha (Mc)");
+        assert!(is_word_char('၀'), "Myanmar digit zero (Nd)");
+        assert!(!is_word_char('။') && !is_word_char('၊'), "section punctuation stays a boundary");
         assert!(first_strong_is_rtl("سلام"));
         assert!(first_strong_is_rtl("من ناوم هێڤاره"));
         assert!(first_strong_is_rtl("  123. سلام"));

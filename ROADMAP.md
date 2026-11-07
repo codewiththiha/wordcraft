@@ -1272,6 +1272,7 @@ MATH glyphs that reference the same construction now share its immutable variant
 | 2026-11-02 | trivial | Progress log: emphasis marks, SET fields, ODT page backgrounds and tables (gap 19) |
 | 2026-11-02 | trivial | Progress log: ODT checked against LibreOffice's templates (gap 19) |
 | 2026-11-07 | minor | Myanmar: a space-delimited token no longer breaks between its syllables — Word keeps the token whole and wraps it to the next line (checked against MS Word); an unspaced Myanmar run breaks at the line edge, between syllable clusters |
+| 2026-11-07 | minor | Word selection: a space-delimited Myanmar token selects whole on double-click and word-wise Ctrl+arrow — every combining mark (Mn, Mc) is an in-word character, so selection covers Myanmar, Khmer, Thai, Lao, the Brahmic family, Hebrew niqqud and every script that writes marks inside words; punctuation stays a boundary (#604) |
 | 2026-11-01 | trivial | Progress log: ODT at ~90% (gap 19) |
 | 2026-10-29 | trivial | Progress log: corporate authors in bibliographies (#4848) |
 | 2026-10-29 | trivial | Progress log: Table Properties follows the selection (#4857) |

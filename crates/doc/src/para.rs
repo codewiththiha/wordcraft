@@ -786,6 +786,23 @@ mod tests {
         assert_eq!(p.prev_boundary(0), 0);
     }
 
+    #[test]
+    fn word_at_selects_the_whole_myanmar_space_delimited_run() {
+        // Word does not break — or select — inside a space-delimited Myanmar token, however
+        // many stacked marks it carries: a double-click selects the run between the spaces,
+        // like a Latin word (refs #604). Bytes: စ 0..3, မ 3..6, ် 6..9, း 9..12, ' ' 12,
+        // သ 13..16, ပ 16..19, ် 19..22, ခ 22..25, ြ 25..28, င 28..31, ် 31..34, း 34..37.
+        let p = Paragraph::with_text("စမ်း သပ်ခြင်း", CharProps::default());
+        assert_eq!(p.text.len(), 37);
+        // word_at includes trailing spaces (existing Word-parity behavior).
+        for off in [0, 3, 6, 9] {
+            assert_eq!(p.word_at(off), (0, 13), "first run at {off}");
+        }
+        for off in [13, 16, 19, 22, 25, 28, 31, 34] {
+            assert_eq!(p.word_at(off), (13, 37), "second run at {off}");
+        }
+    }
+
     proptest::proptest! {
         #[test]
         fn edits_keep_runs_consistent(ops in proptest::collection::vec((0u8..4, 0usize..40, 0usize..40, "[a-zé ]{0,5}"), 0..40)) {

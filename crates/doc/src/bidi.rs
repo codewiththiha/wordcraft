@@ -4,6 +4,8 @@
 //! the cheap questions the model and the engine need: does a character belong to a
 //! right-to-left script, and is it formatted with the complex-script properties?
 
+use unicode_general_category::{get_general_category, GeneralCategory};
+
 /// A character of a right-to-left script: Hebrew, Arabic (Persian, Urdu…), Syriac, Thaana, N'Ko,
 /// Samaritan, Mandaic, and their presentation forms. Includes the Arabic-Indic and Persian
 /// (Extended Arabic-Indic) digits and the Arabic combining marks.
@@ -23,13 +25,19 @@ pub fn is_complex_script(c: char) -> bool {
 }
 
 /// A character that belongs to a word for word selection and Ctrl+arrow movement: letters,
-/// digits, `_` and `'`, plus what sits inside Persian and Arabic words: the zero-width non-joiner
-/// (نیم‌فاصله, as in «می‌خواهم»), the zero-width joiner, tatweel and the Arabic combining marks.
+/// digits, `_` and `'`, plus what sits inside words: the zero-width non-joiner
+/// (نیم‌فاصله, as in «می‌خواهم»), the zero-width joiner, the tatweel (a Lm modifier letter, hence
+/// already alphanumeric) and every combining mark (Mn, Mc). Marks attach to a base character
+/// and never stand alone, so the predicate holds for Myanmar, Khmer, Thai, Lao, the Brahmic
+/// family, Hebrew niqqud and every script that writes combining marks inside words: a
+/// space-delimited Myanmar token is one word, as in Word (refs #604). U+08EA (Arabic tone two
+/// dots above, a Cf sign used inside Arabic words) is kept explicitly.
 pub fn is_word_char(c: char) -> bool {
     c.is_alphanumeric()
         || c == '_'
         || c == '\''
-        || matches!(u32::from(c), 0x200C | 0x200D | 0x0640 | 0x0610..=0x061A | 0x064B..=0x065F | 0x0670 | 0x06D6..=0x06DC | 0x06DF..=0x06E8 | 0x06EA..=0x06ED | 0x08D3..=0x08FF | 0x0300..=0x036F)
+        || matches!(get_general_category(c), GeneralCategory::NonspacingMark | GeneralCategory::SpacingMark)
+        || matches!(u32::from(c), 0x200C | 0x200D | 0x08EA)
 }
 
 /// Does `text` contain a right-to-left character?
@@ -76,6 +84,30 @@ mod tests {
         assert!("می‌خواهم".chars().all(is_word_char), "ZWNJ is inside the word");
         assert!("کِتاب".chars().all(is_word_char), "so are harakat");
         assert!(!is_word_char(' ') && !is_word_char('،'));
+        // Myanmar dependent signs (vowels, tones, asat, stacker, medials) are not
+        // alphanumeric but sit inside a syllable; the selection treats a space-delimited
+        // Myanmar run as one word, and so does every combining-mark script (refs #604).
+        assert!("စမ်း သပ်ခြင်း".chars().filter(|c| *c != ' ').all(is_word_char));
+        assert!(is_word_char('\u{1039}'), "killer/virama");
+        assert!(is_word_char('\u{103A}'), "asat");
+        assert!(is_word_char('\u{102C}'), "aa vowel (Mc)");
+        assert!(is_word_char('\u{1031}'), "e-kar (Mc)");
+        assert!(is_word_char('\u{103C}'), "medial ra (Mc)");
+        assert!(is_word_char('\u{103E}'), "medial ha (Mc)");
+        // The general rule: every combining mark (Mn/Mc) is in-word, so the fix reaches
+        // scripts beyond the Myanmar ranges (and any future Mn assignment).
+        assert!("ก่อน".chars().all(is_word_char), "Thai letters and a tone mark");
+        assert!(is_word_char('\u{0E34}'), "Thai vowel sign (Mn)");
+        assert!(is_word_char('\u{0E48}'), "Thai tone mark (Mn)");
+        assert!("हिन्दी".chars().all(is_word_char), "Devanagari");
+        assert!(is_word_char('\u{0903}'), "visarga (Mc)");
+        assert!(is_word_char('\u{093F}'), "vowel sign I (Mc)");
+        assert!(is_word_char('\u{094D}'), "virama (Mn)");
+        assert!("שָׁלוֹם".chars().all(is_word_char), "Hebrew with niqqud");
+        assert!(is_word_char('\u{05B0}'), "Hebrew sheva (Mn)");
+        assert!(is_word_char('\u{08EA}'), "Arabic tone two dots above (Cf, kept explicitly)");
+        assert!(is_word_char('၀'), "Myanmar digit zero (Nd)");
+        assert!(!is_word_char('။') && !is_word_char('၊'), "section punctuation stays a boundary");
         assert!(first_strong_is_rtl("سلام"));
         assert!(first_strong_is_rtl("من ناوم هێڤاره"));
         assert!(first_strong_is_rtl("  123. سلام"));

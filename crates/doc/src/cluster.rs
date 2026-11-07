@@ -1,5 +1,5 @@
 //! Text clusters for complex scripts (Myanmar, Khmer, Tai Tham, the Indic scripts): where the
-//! caret may stop, what Backspace removes, and where Myanmar text may wrap.
+//! caret may stop and what Backspace removes.
 //!
 //! Extended grapheme clusters (UAX #29) split some syllables that a shaper draws as one unit: a
 //! Myanmar consonant stacked under a virama (`မ္ဘ`), the Myanmar vowel signs U+102B/U+102C and
@@ -141,39 +141,6 @@ pub fn backspaces_by_char(c: char) -> bool {
         | 0xAA60..=0xAA7F) // Myanmar Extended-A
 }
 
-/// A Myanmar character that starts a syllable: a consonant (with the Mon, Shan and Karen ones),
-/// an independent vowel, the great sa.
-fn myanmar_syllable_start(c: char) -> bool {
-    matches!(u32::from(c), 0x1000..=0x102A | 0x103F | 0x1050..=0x1055 | 0x105A..=0x105D | 0x1061 | 0x1065..=0x1066 | 0x106E..=0x1070 | 0x1075..=0x1081 | 0x108E)
-}
-
-/// Line-break opportunities inside Myanmar text, which has no spaces between words: before each
-/// syllable (UAX #14 leaves class SA to a dictionary; Word breaks Myanmar between syllables). A
-/// consonant starts a syllable unless it is stacked (after U+1039) or a final (followed, perhaps
-/// after a medial, by the asat U+103A, the virama U+1039 or the dot below U+1037). Byte offsets,
-/// sorted; only between two Myanmar characters.
-pub fn myanmar_breaks(text: &str) -> Vec<usize> {
-    let chars: Vec<(usize, char)> = text.char_indices().collect();
-    let myanmar = |c: char| matches!(u32::from(c), 0x1000..=0x109F | 0xA9E0..=0xA9FF | 0xAA60..=0xAA7F);
-    let mut out = Vec::new();
-    for k in 1..chars.len() {
-        let (Some(&(i, c)), Some(&(_, prev))) = (chars.get(k), chars.get(k - 1)) else { continue };
-        if !myanmar(prev) || !myanmar_syllable_start(c) || is_stacker(prev) {
-            continue;
-        }
-        // Skip one medial ya/ha, then look for a killer.
-        let mut j = k + 1;
-        if chars.get(j).is_some_and(|&(_, n)| matches!(n, '\u{103B}' | '\u{103E}')) {
-            j += 1;
-        }
-        if chars.get(j).is_some_and(|&(_, n)| matches!(n, '\u{1037}' | '\u{1039}' | '\u{103A}')) {
-            continue;
-        }
-        out.push(i);
-    }
-    out
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,18 +212,6 @@ mod tests {
         assert_eq!(prev_cluster(s, 13), 6);
         assert_eq!(prev_cluster("", 5), 0);
         assert_eq!(next_cluster("", 0), 0);
-    }
-
-    #[test]
-    fn myanmar_wraps_between_syllables() {
-        // မြန်မာစာ: not before န (န် is a final, killed by the asat), so before မာ and စာ.
-        assert_eq!(myanmar_breaks(MYANMAR), vec![12, 18]);
-        // Never before a stacked consonant or one followed by medial + asat.
-        assert!(myanmar_breaks("\u{1019}\u{1039}\u{1018}\u{102C}").is_empty());
-        assert!(myanmar_breaks("ကျွန်").is_empty(), "န် is the final of ကျွန်");
-        // Not between Latin and Myanmar (UAX #14 handles that) or inside Latin.
-        assert!(myanmar_breaks("abcက").is_empty());
-        assert!(myanmar_breaks("").is_empty());
     }
 
     #[test]

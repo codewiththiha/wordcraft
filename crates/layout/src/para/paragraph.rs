@@ -799,12 +799,12 @@ fn break_positions(text: &str, rp: &wordcraft_doc::resolve::ResolvedPara) -> Vec
         found.sort_unstable();
         found.dedup();
     }
-    // Myanmar has no spaces between words: it wraps between syllables.
-    if text.chars().any(|c| matches!(u32::from(c), 0x1000..=0x109F | 0xA9E0..=0xA9FF | 0xAA60..=0xAA7F)) {
-        found.extend(wordcraft_doc::cluster::myanmar_breaks(text));
-        found.sort_unstable();
-        found.dedup();
-    }
+    // Myanmar: Word does not break a space-delimited token between its syllables however long
+    // it is (checked in MS Word: "သုံးပါးဆယ်လီ" stays on one line, the token wraps whole), and a
+    // polysyllabic word is not reliably split without a dictionary (UTN #11). So a Myanmar token
+    // wraps whole at the spaces around it, like a Latin word. A token too wide for the line still
+    // splits at the line edge (`break_long_word`), between syllable clusters, never inside one —
+    // which is also how an unspaced Myanmar run wraps.
     // Asian typography: kinsoku and breaking Latin words anywhere.
     crate::kinsoku::apply(text, &mut found, rp.kinsoku, rp.word_wrap);
     found

@@ -1,0 +1,80 @@
+name: macOS (fork build, unsigned)
+
+# Fork-only helper. The shared release pipeline (craft-common-actions/release.yml) builds the
+# macOS assets on `macos-15-xlarge`, a paid larger runner that is unavailable on this fork, so
+# its macOS job can never run here. This workflow mirrors that job minus signing: same
+# packaging (packaging/macos/package.sh --arch universal), same inputs, on the standard
+# Apple-silicon `macos-15` runner, with no signing secrets — the artifacts are ad-hoc signed
+# and NOT notarized (Gatekeeper will warn / block on other Macs; users can right-click → Open).
+#
+# Pushed on a branch on purpose: dispatchable from that branch. Whether to merge it into the
+# fork's main is left to the maintainer.
+
+on:
+  # Push-triggered so it can build without landing on the default branch; also dispatchable.
+  push:
+    branches: [ci/macos-fork-build]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version override (empty: Cargo.toml)"
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: macos-fork-build-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  macos:
+    timeout-minutes: 90
+    name: macOS universal (fork, unsigned)
+    runs-on: macos-15
+    env:
+      CARGO_TERM_COLOR: always
+      CARGO_INCREMENTAL: 0
+      RUST_BACKTRACE: 1
+      WORDCRAFT_BUILD_SHA: ${{ github.sha }}
+      INPUT_VERSION: ${{ inputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check out craft-fonts (suite pin)
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: storytold/craft-fonts
+          ref: b076417b5880bd4154bd22f00695b1d28c6bea83
+          path: craft-fonts
+      - name: Check out craft-i18n
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: storytold/craft-i18n
+          path: craft-i18n
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+          targets: aarch64-apple-darwin, x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          key: release-macos-fork-universal
+      - name: Apply version override
+        if: inputs.version != ''
+        run: cargo xtask version set "$INPUT_VERSION"
+      - name: Import signing certificate (no-op without secrets; ad-hoc fallback)
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: packaging/macos/import-cert.sh
+      - name: Build and package (ad-hoc signed dmg + cli zip)
+        env:
+          CRAFT_FONTS_DIR: ${{ github.workspace }}/craft-fonts
+          CRAFT_FONTS_REQUIRED: "1"
+        run: packaging/macos/package.sh --arch universal
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-macos
+          path: dist/release/*
+          if-no-files-found: error
